@@ -26,11 +26,39 @@ class Localization {
   async loadTranslations() {
     try {
       for (const locale of this.supportedLocales) {
-        const response = await fetch(chrome.runtime.getURL(`assets/locales/${locale}.json`));
-        if (response.ok) {
-          this.translations[locale] = await response.json();
-        } else {
-          console.error(`Erro ao carregar traduções para ${locale}:`, response.statusText);
+        try {
+          // Use the appropriate API based on browser
+          const url = chrome.runtime.getURL(`assets/locales/${locale}.json`);
+          const response = await fetch(url);
+          
+          if (response.ok) {
+            this.translations[locale] = await response.json();
+          } else {
+            console.error(`Erro ao carregar traduções para ${locale}:`, response.statusText);
+            
+            // Fallback if fetch fails
+            if (!this.translations[locale]) {
+              this.translations[locale] = {
+                general: {
+                  title: "Bestiary Arena Mod Loader",
+                  version: "Versão"
+                },
+                messages: {
+                  error: "Erro",
+                  noScripts: "Nenhum script adicionado",
+                  noLocalMods: "Nenhum mod local disponível",
+                  firefoxWarning: "Atenção: no Firefox, existe uma limitação com carregamento de Gists. Importe mods locais se possível."
+                }
+              };
+            }
+          }
+        } catch (error) {
+          console.error(`Erro ao carregar traduções para ${locale}:`, error);
+          
+          // Ensure we have at least minimal translations
+          if (!this.translations[locale]) {
+            this.translations[locale] = {};
+          }
         }
       }
     } catch (error) {
@@ -43,6 +71,10 @@ class Localization {
     
     const keys = key.split('.');
     let translation = this.translations[currentLocale];
+    
+    if (!translation) {
+      return key; // Return key if no translations available
+    }
     
     for (const k of keys) {
       if (!translation || !translation[k]) {
@@ -108,5 +140,4 @@ class Localization {
   }
 }
 
-const i18n = new Localization();
-export default i18n;
+window.i18n = new Localization();

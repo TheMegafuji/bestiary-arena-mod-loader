@@ -1,24 +1,46 @@
+// First load the browser polyfill
+const polyfillScript = document.createElement('script');
+polyfillScript.setAttribute('type', 'text/javascript');
+polyfillScript.setAttribute('src', chrome.runtime.getURL('assets/js/browser-polyfill.js'));
+(document.head || document.documentElement).appendChild(polyfillScript);
+
 // Content Script Injector for Bestiary Arena Mod Loader
 console.log('Content Script Injector initializing...');
 
+// Garantir acesso à função getURL em qualquer ambiente
+const getExtensionURL = (path) => {
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL) {
+    return chrome.runtime.getURL(path);
+  } else if (typeof browser !== 'undefined' && browser.runtime && browser.runtime.getURL) {
+    return browser.runtime.getURL(path);
+  } else {
+    // Fallback para caminho relativo
+    return path;
+  }
+};
+
 // Store the base URL for mods
-const modsBaseUrl = chrome.runtime.getURL('mods/');
+const modsBaseUrl = getExtensionURL('mods/');
 console.log('Mods base URL:', modsBaseUrl);
 
 // Script injection function
 function injectScript(filePath) {
   return new Promise((resolve) => {
     const script = document.createElement('script');
-    script.src = chrome.runtime.getURL(filePath);
+    
+    script.src = getExtensionURL(filePath);
     script.type = filePath.endsWith('.mjs') ? 'module' : 'text/javascript';
+    
     script.onload = function() {
       console.log(`Script ${filePath} injected and loaded`);
       resolve();
     };
+    
     script.onerror = function(error) {
       console.error(`Error loading script ${filePath}:`, error);
       resolve(); // Resolve anyway to continue the chain
     };
+    
     (document.head || document.documentElement).appendChild(script);
     console.log(`Script ${filePath} injection started`);
   });

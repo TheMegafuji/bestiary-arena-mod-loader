@@ -1,6 +1,32 @@
 // By mathiasbynens
 // Modified to work as a module and expose functions to window object
 
+// Import our robust browser polyfill by checking if it's already available
+// and creating it manually if not
+if (typeof window.browser === 'undefined' || typeof window.chrome === 'undefined') {
+	// Set up more complete polyfill
+	if (typeof window.browser !== 'undefined' && typeof window.chrome === 'undefined') {
+		// Firefox environment (browser exists, chrome doesn't)
+		window.chrome = window.browser;
+	} 
+	else if (typeof window.chrome !== 'undefined' && typeof window.browser === 'undefined') {
+		// Chrome environment (chrome exists, browser doesn't)
+		window.browser = {
+			// Add basic API compatibility shims
+			runtime: {
+				getURL: window.chrome.runtime.getURL,
+				sendMessage: window.chrome.runtime.sendMessage,
+				onMessage: window.chrome.runtime.onMessage
+			},
+			storage: {
+				local: window.chrome.storage.local,
+				sync: window.chrome.storage.sync
+			},
+			tabs: window.chrome.tabs
+		};
+	}
+}
+
 // Wrap everything in an IIFE to protect variables
 (() => {
 	console.log('Loading BA Sandbox Utils...');

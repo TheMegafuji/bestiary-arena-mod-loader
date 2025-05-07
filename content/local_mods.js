@@ -1,3 +1,8 @@
+// Polyfill for Chrome and Firefox WebExtensions
+if (typeof window.browser === 'undefined') {
+  window.browser = window.chrome;
+}
+
 console.log('Local Mods Loader initializing...');
 
 let localMods = [];

@@ -1,3 +1,9 @@
+// First import our polyfill for consistent API across browsers
+const polyfillScript = document.createElement('script');
+polyfillScript.setAttribute('type', 'text/javascript');
+polyfillScript.setAttribute('src', chrome.runtime.getURL('assets/js/browser-polyfill.js'));
+(document.head || document.documentElement).appendChild(polyfillScript);
+
 function injectScript(file) {
   console.log(`Injecting script: ${file}`);
   const script = document.createElement('script');

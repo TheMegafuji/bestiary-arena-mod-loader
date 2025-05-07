@@ -1,3 +1,36 @@
+// Import our robust polyfill
+(async function loadPolyfill() {
+  try {
+    // First try to see if we can directly reference chrome or browser objects
+    if (typeof window.chrome === 'undefined' && typeof window.browser !== 'undefined') {
+      window.chrome = window.browser;
+    } else if (typeof window.browser === 'undefined' && typeof window.chrome !== 'undefined') {
+      window.browser = window.chrome;
+    }
+    
+    // Dynamically load polyfill script
+    try {
+      const polyfillUrl = (window.chrome?.runtime?.getURL || window.browser?.runtime?.getURL || function(path) { return path; })('assets/js/browser-polyfill.js');
+      
+      // Try to fetch and evaluate the polyfill
+      const response = await fetch(polyfillUrl);
+      if (response.ok) {
+        const polyfillScript = await response.text();
+        // Execute script in the current scope
+        new Function(polyfillScript)();
+      }
+    } catch (polyfillError) {
+      console.warn('Could not load polyfill script, falling back to basic compatibility mode', polyfillError);
+      
+      // Basic compatibility fallback
+      window.chrome = window.chrome || (window.browser || {});
+      window.browser = window.browser || (window.chrome || {});
+    }
+  } catch (error) {
+    console.error('Error setting up browser compatibility:', error);
+  }
+})();
+
 (function() {
   if (window.BestiaryModAPI) return;
   
@@ -65,7 +98,10 @@
       
       const script = document.createElement('script');
       // Use the extension's local copy instead of trying to fetch from bestiaryarena.com
-      script.src = chrome.runtime.getURL('assets/js/ui_components.js');
+      const extensionUrl = typeof chrome !== 'undefined' ? chrome.runtime.getURL('assets/js/ui_components.js') : 
+                          (typeof browser !== 'undefined' ? browser.runtime.getURL('assets/js/ui_components.js') : 
+                          'assets/js/ui_components.js');
+      script.src = extensionUrl;
       script.onload = () => {
         console.log('UI Components loaded successfully');
         

@@ -17,17 +17,22 @@
     }
   },
   "background": {
-    "service_worker": "background.js"
+    "scripts": ["background.js"]
   },
   "content_scripts": [
     {
       "matches": ["*://bestiaryarena.com/*"],
-      "js": ["content/injector.js"],
+      "js": ["assets/js/browser-polyfill.js", "content/injector.js"],
       "run_at": "document_start"
     },
     {
       "matches": ["*://bestiaryarena.com/*"],
-      "js": ["content/utility_injector.js"],
+      "js": ["assets/js/browser-polyfill.js", "content/content_injector.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://bestiaryarena.com/*"],
+      "js": ["assets/js/browser-polyfill.js", "content/utility_injector.js"],
       "run_at": "document_idle"
     }
   ],
@@ -47,6 +52,8 @@
         "content/local_mods.js", 
         "content/utility_injector.js",
         "content/ba-sandbox-utils.mjs",
+        "content/content_injector.js",
+        "assets/js/browser-polyfill.js",
         "assets/icons/*", 
         "assets/js/*",
         "assets/fonts/*",
@@ -55,5 +62,11 @@
       ],
       "matches": ["*://bestiaryarena.com/*"]
     }
-  ]
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "bestiaryarena-modloader@themegafuji.com",
+      "strict_min_version": "109.0"
+    }
+  }
 } 

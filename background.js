@@ -1,3 +1,6 @@
+// Import the robust polyfill first
+importScripts('assets/js/browser-polyfill.js');
+
 const scriptCache = {};
 
 let localMods = [];
@@ -6,33 +9,95 @@ function hashToGistUrl(hash) {
   return `https://gist.githubusercontent.com/raw/${hash}?cache=${Date.now()}`;
 }
 
+// Função para verificar se é Firefox
+function isFirefox() {
+  return navigator.userAgent.includes('Firefox') || 
+         (typeof browser !== 'undefined' && 
+          typeof chrome !== 'undefined' && 
+          Object.getPrototypeOf(browser) !== Object.getPrototypeOf(chrome));
+}
+
 async function fetchScript(hash) {
   try {
     const url = hashToGistUrl(hash);
     
-    const response = await fetch(url, {
-      cache: 'no-store',
-      headers: {
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache'
+    // Try fetch first for better compatibility
+    try {
+      const response = await fetch(url, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
       }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+      
+      const scriptContent = await response.text();
+      
+      if (scriptContent.length > 1024 * 1024) {
+        throw new Error('Script too large (max 1MB)');
+      }
+      
+      scriptCache[hash] = scriptContent;
+      chrome.storage.local.set({ [`script_${hash}`]: scriptContent })
+        .then(() => {})
+        .catch((err) => console.error('Failed to save script to cache', err));
+      
+      return scriptContent;
+    } catch (fetchError) {
+      // If fetch fails and we're in Firefox, fall back to XMLHttpRequest
+      if (isFirefox() && (fetchError.message.includes('CORS') || fetchError.message.includes('network'))) {
+        console.log('Fetch failed, falling back to XMLHttpRequest', fetchError);
+        
+        return new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', url, true);
+          xhr.setRequestHeader('Cache-Control', 'no-cache');
+          xhr.setRequestHeader('Pragma', 'no-cache');
+          
+          xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              const scriptContent = xhr.responseText;
+              
+              if (scriptContent.length > 1024 * 1024) {
+                reject(new Error('Script too large (max 1MB)'));
+                return;
+              }
+              
+              scriptCache[hash] = scriptContent;
+              chrome.storage.local.set({ [`script_${hash}`]: scriptContent })
+                .then(() => resolve(scriptContent))
+                .catch(() => resolve(scriptContent)); // Continue even if storage fails
+            } else {
+              if (isFirefox() && xhr.status === 0) {
+                // Firefox CORS issue com GitHub Gist
+                reject(new Error('Firefox não consegue acessar Gists diretamente devido a restrições de CORS. Use o Chrome para esta funcionalidade ou importar scripts locais.'));
+              } else {
+                reject(new Error(`HTTP error! Status: ${xhr.status}`));
+              }
+            }
+          };
+          
+          xhr.onerror = function() {
+            if (isFirefox()) {
+              reject(new Error('Firefox não consegue acessar Gists diretamente devido a restrições de CORS. Use o Chrome para esta funcionalidade ou importar scripts locais.'));
+            } else {
+              reject(new Error('Network error fetching script'));
+            }
+          };
+          
+          xhr.send();
+        });
+      } else {
+        // For non-CORS errors or non-Firefox browsers, rethrow
+        throw fetchError;
+      }
     }
-    
-    const scriptContent = await response.text();
-    
-    if (scriptContent.length > 1024 * 1024) {
-      throw new Error('Script too large (max 1MB)');
-    }
-    
-    scriptCache[hash] = scriptContent;
-    await chrome.storage.local.set({ [`script_${hash}`]: scriptContent });
-    
-    return scriptContent;
   } catch (error) {
+    console.error('Error fetching script:', error);
     return null;
   }
 }
@@ -71,20 +136,29 @@ async function setActiveScripts(activeScripts) {
 
 async function getLocalMods() {
   try {
+    console.log('Tentando obter mods locais...');
     // First try to get from sync storage
     const syncData = await chrome.storage.sync.get('localMods');
     
-    if (syncData.localMods && syncData.localMods.length > 0) {
+    if (syncData.localMods && Array.isArray(syncData.localMods) && syncData.localMods.length > 0) {
+      console.log('Mods locais encontrados no storage sync:', syncData.localMods.length);
       // If found in sync, also update local storage
       await chrome.storage.local.set({ localMods: syncData.localMods });
       return syncData.localMods;
     }
     
     // Fall back to local storage
+    console.log('Tentando obter mods locais do storage local...');
     const localData = await chrome.storage.local.get('localMods');
-    return localData.localMods || [];
+    if (localData.localMods && Array.isArray(localData.localMods)) {
+      console.log('Mods locais encontrados no storage local:', localData.localMods.length);
+      return localData.localMods;
+    }
+    
+    console.log('Nenhum mod local encontrado em ambos storages, retornando array vazio');
+    return [];
   } catch (error) {
-    console.error('Error getting local mods:', error);
+    console.error('Erro ao obter mods locais:', error);
     return [];
   }
 }
@@ -340,35 +414,73 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === 'registerLocalMods') {
-    console.log('Background: Registering local mods:', message.mods);
+    console.log('Background: Registrando mods locais:', message.mods);
+    
+    // Garantir que os mods fornecidos são válidos
+    const newMods = message.mods && Array.isArray(message.mods) ? message.mods : [];
+    
+    if (newMods.length === 0) {
+      console.warn('Background: Lista de mods vazia ou inválida');
+      sendResponse({ success: true, mods: [] });
+      return true;
+    }
     
     // Get existing mods to preserve enabled states
     getLocalMods().then(existingMods => {
-      const newMods = message.mods || [];
+      const existingModArray = Array.isArray(existingMods) ? existingMods : [];
       
       // Create a map of existing mod states
       const existingModStates = {};
-      existingMods.forEach(mod => {
-        existingModStates[mod.name] = mod.enabled;
+      existingModArray.forEach(mod => {
+        if (mod && mod.name) {
+          existingModStates[mod.name] = mod.enabled;
+        }
       });
       
       // Process incoming mods, preserving enabled states from existing mods
-      localMods = newMods.map(mod => ({
-        name: mod.name,
-        displayName: mod.displayName || mod.name,
-        isLocal: true,
-        // If mod existed before, use its previous enabled state, otherwise default to enabled
-        enabled: existingModStates.hasOwnProperty(mod.name) ? existingModStates[mod.name] : true
-      }));
+      localMods = newMods.map(mod => {
+        if (!mod || !mod.name) {
+          console.warn('Background: Mod inválido na lista:', mod);
+          return null;
+        }
+        
+        return {
+          name: mod.name,
+          displayName: mod.displayName || mod.name,
+          isLocal: true,
+          // If mod existed before, use its previous enabled state, otherwise default to enabled
+          enabled: existingModStates.hasOwnProperty(mod.name) ? existingModStates[mod.name] : (mod.enabled !== undefined ? mod.enabled : true)
+        };
+      }).filter(mod => mod !== null); // Filtrar mods inválidos
       
-      console.log('Background: Processed local mods with preserved states:', localMods);
+      console.log('Background: Mods locais processados com estados preservados:', localMods);
       
-      // Save to sync storage first, then to local
-      chrome.storage.sync.set({ localMods }, () => {
+      // Função para salvar os mods e responder
+      const saveModsAndRespond = () => {
         chrome.storage.local.set({ localMods }, () => {
-          sendResponse({ success: true, mods: localMods });
+          if (chrome.runtime.lastError) {
+            console.error('Background: Erro ao salvar mods no storage local:', chrome.runtime.lastError);
+            sendResponse({ success: false, error: chrome.runtime.lastError.message, mods: localMods });
+          } else {
+            console.log('Background: Mods salvos com sucesso no storage local');
+            sendResponse({ success: true, mods: localMods });
+          }
         });
+      };
+      
+      // Tentar salvar no sync primeiro, com fallback para local
+      chrome.storage.sync.set({ localMods }, () => {
+        if (chrome.runtime.lastError) {
+          console.warn('Background: Erro ao salvar no sync, usando apenas storage local:', chrome.runtime.lastError);
+          saveModsAndRespond();
+        } else {
+          console.log('Background: Mods salvos com sucesso no storage sync');
+          saveModsAndRespond();
+        }
       });
+    }).catch(error => {
+      console.error('Background: Erro ao obter mods existentes:', error);
+      sendResponse({ success: false, error: error.message, mods: [] });
     });
     
     return true;
@@ -500,17 +612,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === 'getLocalMods') {
+    console.log('Background: Recebendo solicitação getLocalMods');
     getLocalMods()
       .then(mods => {
-        localMods = mods;
-        console.log('Background: Returning local mods:', localMods);
+        localMods = mods || []; // Garantir que localMods nunca seja null/undefined
+        console.log('Background: Retornando mods locais:', localMods.length, 'mods');
         sendResponse({ success: true, mods: localMods });
       })
       .catch(error => {
-        console.error('Error fetching local mods:', error);
-        sendResponse({ success: false, error: error.message });
+        console.error('Background: Erro ao buscar mods locais:', error);
+        // Garantir uma resposta válida mesmo em caso de erro
+        sendResponse({ success: false, error: error.message, mods: [] });
       });
-    return true;
+    return true; // Indica resposta assíncrona
   }
   
   if (message.action === 'contentScriptReady') {

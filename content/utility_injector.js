@@ -1,3 +1,9 @@
+// First load the browser polyfill
+const polyfillScript = document.createElement('script');
+polyfillScript.setAttribute('type', 'text/javascript');
+polyfillScript.setAttribute('src', chrome.runtime.getURL('assets/js/browser-polyfill.js'));
+(document.head || document.documentElement).appendChild(polyfillScript);
+
 // Utility Injector - Loads the utility functions directly from local file
 
 (function() {
