@@ -654,23 +654,24 @@ function init() {
   loadTickHistory();
   
   // Add the main button
-  api.ui.addButton({
-    id: BUTTON_ID,
-    text: t('buttonText'),
-    modId: MOD_ID,
-    tooltip: t('buttonTooltip'),
-    primary: config.enabled,
-    onClick: toggleTracking
-  });
-  
-  // Add the configuration button
-  api.ui.addButton({
-    id: CONFIG_BUTTON_ID,
-    icon: '⚙️',
-    modId: MOD_ID,
-    tooltip: t('configButtonTooltip'),
-    onClick: () => api.ui.toggleConfigPanel(CONFIG_PANEL_ID)
-  });
+  api.ui.addButtonStack([
+    {
+      id: BUTTON_ID,
+      text: t('buttonText'),
+      modId: MOD_ID,
+      tooltip: t('buttonTooltip'),
+      primary: config.enabled,
+      onClick: toggleTracking,
+      customCss: 'flex-grow: 1;'
+    },
+    {
+      id: CONFIG_BUTTON_ID,
+      icon: '⚙️',
+      modId: MOD_ID,
+      tooltip: t('configButtonTooltip'),
+      onClick: () => api.ui.toggleConfigPanel(CONFIG_PANEL_ID)
+    }
+  ])
   
   // Create the configuration panel
   createConfigPanel();

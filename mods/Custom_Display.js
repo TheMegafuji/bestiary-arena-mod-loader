@@ -924,34 +924,34 @@ function createConfigPanel() {
 function init() {
   console.log('Custom Display initializing UI...');
 
-  // Add the performance mode toggle button
-  api.ui.addButton({
-    id: PERF_TOGGLE_ID,
-    text: t('perfButtonText'),
-    modId: MOD_ID,
-    tooltip: config.performance.enabled ? t('perfButtonTooltipEnabled') : t('perfButtonTooltipDisabled'),
-    primary: config.performance.enabled,
-    onClick: togglePerformanceMode
-  });
-  
-  // Add the grid toggle button
-  api.ui.addButton({
-    id: GRID_TOGGLE_ID,
-    text: t('gridButtonText'),
-    modId: MOD_ID,
-    tooltip: config.mapGrid.enabled ? t('gridButtonTooltipEnabled') : t('gridButtonTooltipDisabled'),
-    primary: config.mapGrid.enabled,
-    onClick: toggleGrid
-  });
-  
-  // Add the configuration button
-  api.ui.addButton({
-    id: CONFIG_BUTTON_ID,
-    icon: '⚙️',
-    modId: MOD_ID,
-    tooltip: t('configButtonTooltip'),
-    onClick: () => api.ui.toggleConfigPanel(CONFIG_PANEL_ID)
-  });
+  api.ui.addButtonStack([
+    // Add the performance mode toggle button
+    {
+      id: PERF_TOGGLE_ID,
+      text: t('perfButtonText'),
+      modId: MOD_ID,
+      tooltip: config.performance.enabled ? t('perfButtonTooltipEnabled') : t('perfButtonTooltipDisabled'),
+      primary: config.performance.enabled,
+      onClick: togglePerformanceMode
+    },
+    // Add the grid toggle button
+    {
+      id: GRID_TOGGLE_ID,
+      text: t('gridButtonText'),
+      modId: MOD_ID,
+      tooltip: config.mapGrid.enabled ? t('gridButtonTooltipEnabled') : t('gridButtonTooltipDisabled'),
+      primary: config.mapGrid.enabled,
+      onClick: toggleGrid
+    },
+    // Add the configuration button
+    {
+      id: CONFIG_BUTTON_ID,
+      icon: '⚙️',
+      modId: MOD_ID,
+      tooltip: t('configButtonTooltip'),
+      onClick: () => api.ui.toggleConfigPanel(CONFIG_PANEL_ID)
+    }
+  ])
   
   // Create the configuration panel
   createConfigPanel();
