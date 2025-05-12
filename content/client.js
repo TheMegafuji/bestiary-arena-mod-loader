@@ -226,6 +226,40 @@ if (typeof window.browser === 'undefined') {
     return translation;
   }
   
+  // mods container
+  function createModsScrollableContainer(){
+    const existingContainer = this.BestiaryModAPI.ui.getScrollContainer('all-mods-lists');
+    if (existingContainer) return existingContainer;
+
+    const modsHeader = document.createElement('h3');
+    modsHeader.textContent = 'Loaded mods';
+    modsHeader.style.cssText = 'margin: 8px; font-size: 1.2rem; border-bottom: 1px solid #444; padding-bottom: 4px; color: white;';
+    
+    const container = this.BestiaryModAPI.ui.components.createScrollContainer({
+      height: 500,
+      content: modsHeader,
+      id: 'all-mods-lists'
+    });
+
+    const wrapper = document.createElement('div');
+    wrapper.id = 'bestiary-mod-buttons';
+    wrapper.style.cssText = `
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      flex-direction: row;
+      gap: 10px;
+      z-index: 9999;
+      max-width: 320px;
+    `;
+
+    // Add elements to the DOM - container first, then toggle button
+    wrapper.appendChild(container.element);
+    document.body.appendChild(wrapper);
+    return container;
+  }
+
   // Managed mod buttons container
   function createModButtonContainer() {
     const existingContainer = document.getElementById('bestiary-mod-buttons');
@@ -327,6 +361,64 @@ if (typeof window.browser === 'undefined') {
     
     document.body.appendChild(container);
     return container;
+  }
+
+  function createButton(options){
+    const {
+      id,
+      text,
+      onClick,
+      modId,
+      primary = false,
+      icon = null,
+      tooltip = null,
+      position = null
+    } = options;
+    
+    const existingButton = document.getElementById(id);
+    if (existingButton) {
+      console.warn(`Button with id ${id} already exists, updating it`);
+      existingButton.textContent = icon ? icon : text;
+      existingButton.title = tooltip || text;
+      
+      const newClickHandler = (e) => {
+        e.preventDefault();
+        onClick(e);
+      };
+      
+      existingButton.removeEventListener('click', existingButton._clickHandler);
+      existingButton._clickHandler = newClickHandler;
+      existingButton.addEventListener('click', newClickHandler);
+      
+      return existingButton;
+    }
+    
+    const button = document.createElement('button');
+    button.id = id;
+    button.textContent = icon ? icon : text;
+    button.title = tooltip || text;
+    button.setAttribute('data-mod-id', modId || '');
+    
+    button.style.cssText = `
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background: ${primary ? '#4CAF50' : '#555'};
+      color: white;
+    `;
+    
+    if(options.customCss){
+      button.style.cssText += ` ${options.customCss}` 
+    }
+
+    button._clickHandler = (e) => {
+      e.preventDefault();
+      onClick(e);
+    };
+    
+    button.addEventListener('click', button._clickHandler);    
+    return button;
   }
   
   window.BestiaryModAPI = {
@@ -646,61 +738,35 @@ if (typeof window.browser === 'undefined') {
     },
     
     ui: {
-      addButton: function(options) {
-        const {
-          id,
-          text,
-          onClick,
-          modId,
-          primary = false,
-          icon = null,
-          tooltip = null,
-          position = null
-        } = options;
+      addButtonStack: function(options){
+        const scrollableContainer = createModsScrollableContainer();
+
+        const buttonStackContainer = document.createElement('div');
+        buttonStackContainer.classList = 'inline-flex gap-2';
+        buttonStackContainer.style.cssText += 'margin: 4px;';
         
-        const container = createModButtonContainer();
-        
-        const existingButton = document.getElementById(id);
-        if (existingButton) {
-          console.warn(`Button with id ${id} already exists, updating it`);
-          existingButton.textContent = icon ? icon : text;
-          existingButton.title = tooltip || text;
+        for (const option of options) {
+          const button = createButton(option)
           
-          const newClickHandler = (e) => {
-            e.preventDefault();
-            onClick(e);
-          };
-          
-          existingButton.removeEventListener('click', existingButton._clickHandler);
-          existingButton._clickHandler = newClickHandler;
-          existingButton.addEventListener('click', newClickHandler);
-          
-          return existingButton;
+          buttonStackContainer.appendChild(button)
         }
+
+        scrollableContainer.addContent(buttonStackContainer)
         
-        const button = document.createElement('button');
-        button.id = id;
-        button.textContent = icon ? icon : text;
-        button.title = tooltip || text;
-        button.setAttribute('data-mod-id', modId || '');
+      },
+      addButton: function(options) {
+
+        const scrollableContainer = createModsScrollableContainer();
+        const button = createButton(options)
+
         
-        button.style.cssText = `
-          padding: 8px 16px;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          background: ${primary ? '#4CAF50' : '#555'};
-          color: white;
-        `;
-        
-        button._clickHandler = (e) => {
-          e.preventDefault();
-          onClick(e);
-        };
-        
-        button.addEventListener('click', button._clickHandler);
-        
-        container.appendChild(button);
+        const buttonStackContainer = document.createElement('div');
+        buttonStackContainer.classList = 'inline-flex gap-2';
+        buttonStackContainer.style.cssText += `
+          margin: 4px; 
+          flex-direction: column;`;
+        buttonStackContainer.appendChild(button)
+        scrollableContainer.addContent(buttonStackContainer);
         
         return button;
       },
@@ -964,6 +1030,68 @@ if (typeof window.browser === 'undefined') {
         return false;
       },
       
+      getScrollContainer: function(id){
+        if (!window.BestiaryUIComponents) {
+          console.warn('UI Components not loaded, using fallback scroll container');
+
+          const container = document.getElementById(id)
+          if (!container) {
+            console.warn(`Scroll container with id ${id} not found`);
+            return null;
+          }
+          
+          const scrollView = document.getElementById(`${id}-scrollView`);
+          const paddingContainer = document.getElementById(`${id}-paddingContainer`);
+          const scrollbar = document.getElementById(`${id}-scrollbar`)
+
+          function updateScrollThumb() {
+            const containerHeight = scrollView.clientHeight;
+            const scrollHeight = scrollView.scrollHeight;
+            const scrollTop = scrollView.scrollTop;
+            
+            if (scrollHeight <= containerHeight) {
+              scrollbar.style.display = 'none';
+              return;
+            }
+            
+            scrollbar.style.display = 'flex';
+            const thumbHeight = Math.max(30, (containerHeight / scrollHeight) * containerHeight);
+            const thumbPosition = (scrollTop / (scrollHeight - containerHeight)) * (containerHeight - thumbHeight);
+            
+            scrollThumb.style.height = `${thumbHeight}px`;
+            scrollThumb.style.transform = `translate3d(0px, ${thumbPosition}px, 0px)`;
+            scrollbar.style.setProperty('--radix-scroll-area-thumb-height', `${thumbHeight}px`);
+          }
+          
+          return {
+            element: container,
+            scrollView: scrollView,
+            contentContainer: paddingContainer,
+            addContent: (content) => {
+              if (typeof content === 'string') {
+                const contentDiv = document.createElement('div');
+                contentDiv.innerHTML = content;
+                paddingContainer.appendChild(contentDiv);
+              } else if (content instanceof HTMLElement) {
+                paddingContainer.appendChild(content);
+              }
+              
+              // Recalculate scrollbar
+              setTimeout(() => {
+                updateScrollThumb();
+              }, 50);
+            },
+            clear: () => { 
+              paddingContainer.innerHTML = '';
+              
+              // Recalculate scrollbar
+              setTimeout(() => {
+                updateScrollThumb();
+              }, 50);
+            }
+          };
+        }
+      },
       // New UI components
       components: {
         createModal: function(options) {
@@ -978,17 +1106,21 @@ if (typeof window.browser === 'undefined') {
           if (!window.BestiaryUIComponents) {
             console.warn('UI Components not loaded, using fallback scroll container');
             
+            const id = options.id ?? Math.random().toString(36).substring(2,7);
+
             // Create container
             const container = document.createElement('div');
             container.className = 'relative overflow-hidden frame-pressed-1 surface-dark';
             container.style.cssText = `position: relative; height: ${options.height || 300}px; --radix-scroll-area-corner-width: 0px; --radix-scroll-area-corner-height: 0px;`;
-            
+            container.id = id
+
             // Create scroll view with game-styled scrollbar
             const scrollView = document.createElement('div');
             scrollView.setAttribute('data-radix-scroll-area-viewport', '');
             scrollView.setAttribute('data-type', 'always');
             scrollView.className = 'h-full w-[calc(100%-12px)] data-[type=\'auto\']:w-full';
             scrollView.style.cssText = 'overflow: hidden scroll;';
+            scrollView.id = `${id}-scrollView`;
             
             // Create content container
             const contentContainer = document.createElement('div');
@@ -999,7 +1131,8 @@ if (typeof window.browser === 'undefined') {
             paddingContainer.setAttribute('data-nopadding', options.padding === false ? 'true' : 'false');
             paddingContainer.className = 'my-1 grid items-start gap-1 data-[nopadding=\'true\']:my-0';
             paddingContainer.style.cssText = 'grid-template-rows: max-content;';
-            
+            paddingContainer.id = `${id}-paddingContainer`;
+
             if (typeof options.content === 'string') {
               paddingContainer.innerHTML = options.content;
             } else if (options.content instanceof HTMLElement) {
@@ -1021,7 +1154,8 @@ if (typeof window.browser === 'undefined') {
             scrollbar.setAttribute('data-orientation', 'vertical');
             scrollbar.className = 'scrollbar-element frame-1 surface-dark flex touch-none select-none border-0 data-[orientation=\'horizontal\']:h-3 data-[orientation=\'vertical\']:h-full data-[orientation=\'vertical\']:w-3 data-[orientation=\'horizontal\']:flex-col';
             scrollbar.style.cssText = 'position: absolute; top: 0px; right: 0px; bottom: var(--radix-scroll-area-corner-height); --radix-scroll-area-thumb-height: 93.58887171561051px;';
-            
+            scrollbar.id = `${id}-scrollbar`
+
             // Create scrollbar thumb
             const scrollThumb = document.createElement('div');
             scrollThumb.setAttribute('data-state', 'visible');
