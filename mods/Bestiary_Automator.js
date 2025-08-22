@@ -432,27 +432,29 @@ const createConfigPanel = () => {
 
 // Create buttons
 const createButtons = () => {
-  // Create the main toggle button
-  api.ui.addButton({
-    id: BUTTON_ID,
-    text: '',
-    icon: '⚡',
-    modId: MOD_ID,
-    tooltip: config.enabled ? t('statusEnabled') : t('statusDisabled'),
-    primary: config.enabled,
-    onClick: toggleAutomation
-  });
-  
-  // Create the configuration button
-  api.ui.addButton({
-    id: CONFIG_BUTTON_ID,
-    text: '',
-    icon: '⚙️',
-    modId: MOD_ID,
-    tooltip: t('configButtonTooltip'),
-    primary: false,
-    onClick: () => api.ui.toggleConfigPanel(CONFIG_PANEL_ID)
-  });
+  api.ui.addButtonStack([
+    // Create the main toggle button
+    {
+      id: BUTTON_ID,
+      text: '',
+      icon: '⚡',
+      modId: MOD_ID,
+      tooltip: config.enabled ? t('statusEnabled') : t('statusDisabled'),
+      primary: config.enabled,
+      onClick: toggleAutomation,
+      customCss: 'flex-grow: 1;'
+    },
+    // Create the configuration button
+    {
+      id: CONFIG_BUTTON_ID,
+      text: '',
+      icon: '⚙️',
+      modId: MOD_ID,
+      tooltip: t('configButtonTooltip'),
+      primary: false,
+      onClick: () => api.ui.toggleConfigPanel(CONFIG_PANEL_ID)
+    }
+  ])
 };
 
 // Initialize the mod
